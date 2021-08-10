@@ -1,119 +1,151 @@
-#include <iostream>
-#include <pthread.h>
-#include <unistd.h>
+#include<stdio.h>
 #include <stdlib.h>
-#include<time.h>
+#include<pthread.h>
+#include<unistd.h>
+
+#define true 1
+#define false 0
+
+#define TAM 10    //tamanho do array (SGBD)
 
 
-pthread_mutex_t* mutex;
-pthread_cond_t* condition;
+pthread_mutex_t mutex[TAM];
+pthread_cond_t ocupado[TAM];
+int SGBD[TAM];    
 
-int* SGBD;
+typedef struct Nodes {
 
-pthread_t* leitora;
-pthread_t* escritora;
-int* escrevendo;
-int* lendo;
+    Node* next;
+    int id;
+}Node;
 
-int N,M,TAM;
+typedef struct linked_list{
+    Node* head;
+    Node* tail;
+}linked_list;
 
+linked_list fila_espera[TAM];
 
-void* ler(void *arg){
-
-    while(1){
-        int pos = rand()%TAM;
-        
-        
-        while(escrevendo[pos]){                          // enquanto tem uma escritora escrevendo esperamos
-            pthread_cond_wait(&condition[pos],&mutex[pos]);
-        }
-
-        lendo[pos] +=1;                                  // uma leitora a mais
-        pthread_mutex_trylock(&mutex[pos]);              // lock as threads escritoras, mas nao as leitoras
-        printf("lendo:SGBD[%d]: %d\n",pos, SGBD[pos]);   //
-        pthread_mutex_unlock(&mutex[pos]);               // unlock
-        lendo[pos] -=1;
-    }
-
-    return NULL;
+int empty(int posicao){
+    return fila_espera[posicao].head == NULL;
 }
 
-void *escrever(void *arg){
-
-    while(1){
-        int pos = rand()%TAM;
-
-        //lock outras escritoras, ou espera outras threads terminarem.
-        pthread_mutex_lock(&mutex[pos]);
-
-
-        while(escrevendo[pos] || lendo[pos]){               //enquanto tem outra thread, espera
-            pthread_cond_wait(&condition[pos],&mutex[pos]);
-        }
-        escrevendo[pos] = 1; //thread ocupada
-
-        // escreve
-        SGBD[pos] = rand()%TAM;                 
-        printf("escrevendo: SGBD[%d]=%d\n",pos,SGBD[pos]);
-
-        pthread_mutex_unlock(&mutex[pos]);          // unlock escritoras
-        escrevendo[pos] = 0;                        // wakeup escritoras e leitoras
-        pthread_cond_broadcast(&condition[pos]);    // wakeup escritoras
-
-    }
-    return NULL;
-}
-
-void input(){
-    printf("numero de threads leitoras: ");
-    scanf("%d",&N);
-    printf("numero de threads: escritoras: ");
-    scanf("%d",&M);
-    printf("numero de posicoes no array(SGBD): ");
-    scanf("%d",&TAM);    
-}
-
-int main() {
-
-    srand(time(NULL));
-
-    input();
+void inserir(int posicao,int ID){   //insere na frente
     
-    leitora   = (pthread_t*)malloc(sizeof(pthread_t)*N);
-    escritora = (pthread_t*)malloc(sizeof(pthread_t)*M)
-
-    mutex     = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t)*TAM);
-    condition = ( pthread_cond_t*)malloc(sizeof(pthread_cond_t)*TAM);
-
-    escrevendo = (int*)malloc(sizeof(int)*TAM);
-    lendo      = (int*)malloc(sizeof(int)*TAM);
-
-    SGBD = (int*)malloc(sizeof(int)*TAM);
-
-    //criar threads
-    for(int i =0; i < N; i++ ){
-        pthread_create(&leitora[i], NULL, ler,NULL);
+    if(fila_espera[posicao].head == NULL){ // se esta vazio
+        fila_espera[posicao].head = fila_espera[posicao].tail = (Node*)malloc(sizeof(Node));
     }
-    for(int i =0; i < M; i++ ){
-        pthread_create(&escritora[i], NULL, escrever,NULL);
+    else{ // se nao esta vazio
+        fila_espera[posicao].tail->next = (Node*)malloc(sizeof(Node));
+        fila_espera[posicao].tail = fila_espera[posicao].tail->next;  
     }
-  
+    fila_espera[id].tail->id = ID;
+    fila_espera[id].tail->next = NULL; // serve para sabermos quando estiver vazio
+}
 
-    //join nas threas
-    for(int i =0; i < N; i++){
-        pthread_join(leitora[i],NULL);
+void remover(int posicao){
+    if(fila_espera[posicao].head == NULL){  //se esta vazio retorna
+        return;
     }
-    for(int i =0; i < M ; i++){
-        pthread_join(escritora[i],NULL);
+    fila_espera[posicao].head = fila_espera[posicao].head->next;
+}
+int id_front(int posicao){
+    return  fila_espera[posicao].head->id;
+}
+
+//LER:
+// criar fila para cada posicao,
+// se a fila esta vazia (condicao), pode ler.
+// se a fila nao esta vazia continua escrevendo ate o fim
+
+void* ler(void* arg){
+
+    int self_id = *((int*)arg);
+
+    while(true){
+        int posicao = rand() %TAM;
+
+        pthread_mutex_lock(&mutex_aux[self_id]);        // travei mutex (antes ate de me inserir na fila)
+        inserir(posicao,self_id);                   // inseri-me na fila de espera da posicao do SGBD 
+        while(empty(posicao)){        // se nao estou na vez, espero. Se estou na vez continuo
+            pthread_cond_wait(&ocupado[posicao],&mutex[posicao]);
+        }
+        int valor = SGBD[posicao];
+        pthread_mutex_unlock(&mutex_aux[self_id]);
+        printf("na posicao: %d, lido: %d\n",posicao,valor);
     }
 
-    free(escrevendo);
-    free(lendo);
-    free(mutex);
-    free(condition);
-    free(escritora);
+    return NULL;
+}
+
+//ESCREVER:
+// travo mutex, coloco-me na lista de espera para escrever na posicao correspondente
+// se sou a cabeca da lista, escrevo e acordo todos
+// se nao sou a cabeca da lista , espero
+
+void* escrever(void* arg){  //arg aponta para id da thread
+    
+    int self_id = *((int*)arg);
+
+    while(true){
+
+        int posicao = rand() %TAM;
+        int valor   = rand() %TAM;
+
+        pthread_mutex_lock(&mutex[posicao]);        // travei mutex (antes ate de me inserir na fila)
+        inserir(posicao,self_id);                   // inseri-me na fila de espera da posicao do SGBD 
+        while(self_id != id_front(posicao)){        // se nao estou na vez, espero. Se estou na vez continuo
+            pthread_cond_wait(&ocupado[posicao],&mutex[posicao]);
+        }
+        SGBD[posicao] = valor;                      // escrevo
+        remover(posicao);                           // removo da fila
+        pthread_mutex_unlock(&mutex[posicao]);     
+        pthread_cond_broadcast(&ocupado[posicao]);
+    }
+    return NULL;
+}
+
+
+
+int main(){
+
+    srand((unsigned) time(NULL));
+    int M,N;
+
+    printf("Numero de threads escritoras (M): ");
+    scanf(" %d",&M);
+    printf("Numero de threads leitoras (N): ");
+    scanf(" %d",&N);
+
+    pthread_t* escritor = (pthread_t*)malloc(M*sizeof(pthread_t));
+    pthread_t* leitora  = (pthread_t*)malloc(N*sizeof(pthread_t));
+    pthread_mutex_t* mutex_aux = (pthread_mutex_t*)malloc(N*sizeof(pthread_mutex_t));
+
+    for(int i=0; i < TAM; I++){
+        fila_espera[i].tail = fila_espera[i].head = NULL;
+    }
+
+    int* id_escritora[M]= (int*)malloc(M*sizeof(int));
+    int* id_leitora[N]  = (int*)malloc(N*sizeof(int));
+
+    for(int i =0; i < M; i++){
+        id_escritora[i] = i;
+        pthread_create(&escritora[i],NULL,escrever,&id_escritora[i]);
+    }
+    for(int i = 0; i < N; i++){
+        id_leitora[i] = NULL;
+        pthread_create(&leitora[i],NULL,ler, &id_leitora[i]);
+    }
+    for(int i =0; i < M; i++){
+        pthread_join(&escritora[i],NULL);
+    }
+    for(int i = 0; i < N; i++){
+        pthread_join(&leitora[i],NULL);
+    }    
+
+    free(escritor);
     free(leitora);
-    free(SGBD);
-        
+    free(mutex_aux);
+
     return 0;
 }
