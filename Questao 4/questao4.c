@@ -8,9 +8,18 @@
 
 #define TAM 10    //tamanho do array (SGBD)
 
-
+srand((unsigned) time(NULL));
+int M,N;
 pthread_mutex_t mutex[TAM];
 pthread_cond_t ocupado[TAM];
+
+pthread_t* escritor ;
+pthread_t* leitora  ;
+pthread_mutex_t* mutex_aux;
+
+int* id_escritora[M];
+int* id_leitora[N]  ;
+
 int SGBD[TAM];    
 
 typedef struct Nodes {
@@ -49,6 +58,7 @@ void remover(int posicao){
     }
     fila_espera[posicao].head = fila_espera[posicao].head->next;
 }
+
 int id_front(int posicao){
     return  fila_espera[posicao].head->id;
 }
@@ -65,13 +75,13 @@ void* ler(void* arg){
     while(true){
         int posicao = rand() %TAM;
 
-        pthread_mutex_lock(&mutex_aux[self_id]);        // travei mutex (antes ate de me inserir na fila)
-        inserir(posicao,self_id);                   // inseri-me na fila de espera da posicao do SGBD 
-        while(empty(posicao)){        // se nao estou na vez, espero. Se estou na vez continuo
-            pthread_cond_wait(&ocupado[posicao],&mutex[posicao]);
+        pthread_mutex_trylock(&mutex_aux[self_id]);     // travei meu proprio mutex (antes ate de me inserir na fila)
+        inserir(posicao,self_id);                       // inseri-me na fila de espera da posicao do SGBD 
+        while(false == empty(posicao)){                          // se nao estou na vez, espero. Se estou na vez continuo
+            pthread_cond_wait(&ocupado[posicao],&mutex_aux[self_id]);
         }
-        int valor = SGBD[posicao];
-        pthread_mutex_unlock(&mutex_aux[self_id]);
+        int valor = SGBD[posicao];                      //le
+        pthread_mutex_unlock(&mutex_aux[self_id]);      // este mutex nao bloqueia ninguem , uma vez que esta relacionado com apenas esta thread
         printf("na posicao: %d, lido: %d\n",posicao,valor);
     }
 
@@ -105,29 +115,35 @@ void* escrever(void* arg){  //arg aponta para id da thread
     return NULL;
 }
 
-
-
-int main(){
-
-    srand((unsigned) time(NULL));
-    int M,N;
+void input(){
 
     printf("Numero de threads escritoras (M): ");
     scanf(" %d",&M);
     printf("Numero de threads leitoras (N): ");
-    scanf(" %d",&N);
+    scanf(" %d",&N);    
+}
 
-    pthread_t* escritor = (pthread_t*)malloc(M*sizeof(pthread_t));
-    pthread_t* leitora  = (pthread_t*)malloc(N*sizeof(pthread_t));
-    pthread_mutex_t* mutex_aux = (pthread_mutex_t*)malloc(N*sizeof(pthread_mutex_t));
+void prepara(){
 
-    for(int i=0; i < TAM; I++){
+    escritor  = (pthread_t*)malloc(M*sizeof(pthread_t));
+    leitora   = (pthread_t*)malloc(N*sizeof(pthread_t));
+    mutex_aux = (pthread_mutex_t*)malloc(N*sizeof(pthread_mutex_t));
+
+    for(int i=0; i < TAM; i++){
         fila_espera[i].tail = fila_espera[i].head = NULL;
     }
 
-    int* id_escritora[M]= (int*)malloc(M*sizeof(int));
-    int* id_leitora[N]  = (int*)malloc(N*sizeof(int));
+    id_escritora[M]= (int*)malloc(M*sizeof(int));
+    id_leitora[N]  = (int*)malloc(N*sizeof(int));
+}
 
+int main(){
+
+    input();
+
+    prepara();
+
+    // cria threads e faz join
     for(int i =0; i < M; i++){
         id_escritora[i] = i;
         pthread_create(&escritora[i],NULL,escrever,&id_escritora[i]);
@@ -146,6 +162,7 @@ int main(){
     free(escritor);
     free(leitora);
     free(mutex_aux);
-
+    free(id_escritora);
+    free(id_leitora);
     return 0;
 }
