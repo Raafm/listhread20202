@@ -1,4 +1,29 @@
 
+/*
+
+Logica geral:
+
+
+Escrever: 
+para escrever na posicao P o valor V (escolhidos aleatoriamente) fazemos o seguinte:
+
+1) marcamos num array que mais uma thread quer escrever: escrevendo[posicao]+=1.
+Com isso bloqueamos a threads leitoras que tentarem a partir de agora comecar o processo de leitura.
+
+2) tentamos travar o mutex para travar outras escritoras. Podemos ficar travados com isso.
+
+3) escrevemos, marcamos que nao queremos mais escrever
+
+4) destravamos threads escritoras
+
+5) se ninguem mais quer escrever, podemos acordar as threads leitoras
+
+Ler:
+vemos se o numeros de threads querendo escrever  == 0, se sim podemos ler. Caso alguma thread queira escrever esperamos
+Por uama questao de uso de mutex associado a variavel de condicao, cada thread leitora tem seu mutex, ou seja, uma nao bloqueia a outra.
+A unica forma de uma thread leitora ser bloqueada e:
+se uma thread escritora marcar que quer escrever antes da leitra comecar o processo de escrita (ollhando no while loop a demanda pro escrita).
+*/
 
 #include<stdio.h>
 #include <stdlib.h>
@@ -8,7 +33,7 @@
 #define true 1
 #define false 0
 
-#define TAM 1    //tamanho do array (SGBD)
+#define TAM 1                       //tamanho do array (SGBD). Recomendo deixar em 1 para ver com mais facilidade a condicao de corrida
 
 
 int M,N;                            // threads N leitoras e M escritoras
@@ -33,7 +58,7 @@ int SGBD[TAM];
 void* ler(void* arg){
 
     int self_id = *((int*)arg);
-
+    printf("iniciando thread leitora: %d\n",self_id);
 
     while(true){
         int posicao = rand() %TAM;
@@ -42,10 +67,12 @@ void* ler(void* arg){
         while(escrevendo[posicao]>0){                      // se nao tem thread escrevendo ou querendo escrever, leio. Se tem thread escrevendo ou querendo escrever, espero
             pthread_cond_wait(&ocupado[posicao],&mutex_aux[self_id]);
         }
-
+        printf("thread leitora %d na vez:\n",self_id);
         int valor = SGBD[posicao];                      //le
         pthread_mutex_unlock(&mutex_aux[self_id]);      // este mutex nao bloqueia ninguem , uma vez que esta relacionada apenas com esta thread
-
+        
+        printf("na posicao: %d, lido: %d\n\n",posicao,valor);
+        sleep(1);
     }
 
     return NULL;
@@ -60,7 +87,7 @@ void* ler(void* arg){
 void* escrever(void* arg){  //arg aponta para id da thread
     
     int self_id = *((int*)arg);
-
+    printf("iniciando thread escritora: %d\n",self_id);
 
     while(true){
 
@@ -70,9 +97,9 @@ void* escrever(void* arg){  //arg aponta para id da thread
 
         pthread_mutex_lock(&mutex[posicao]);        // travei threads escritoras
         
-
+        printf("thread escritora %d na vez:\n",self_id);
         SGBD[posicao] = valor;                      // escrevo
-
+        printf("SGBD[%d] = %d\n",posicao,SGBD[posicao]);
   
         escrevendo[posicao] -= 1;
 
@@ -88,8 +115,10 @@ void* escrever(void* arg){  //arg aponta para id da thread
 
 void input(){
 
-    scanf(" %d %d",&M,&N);
-    
+    printf("Numero de threads escritoras (M): ");
+    scanf(" %d",&M);
+    printf("Numero de threads leitoras (N): ");
+    scanf(" %d",&N);    
 }
 
 void prepara(){

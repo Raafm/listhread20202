@@ -1,0 +1,53 @@
+// linked_list e suas funcoes
+
+typedef struct Node {
+
+    struct Node* next;
+    int id;
+}Node;
+
+typedef struct linked_list{
+    Node* head;
+    Node* tail;
+}linked_list;
+
+linked_list fila_espera[TAM];
+
+int empty(int posicao){
+    return fila_espera[posicao].head == NULL;
+}
+
+void inserir(int posicao,int ID){   //insere na frente
+    
+    if(fila_espera[posicao].head == NULL){ // se esta vazio
+        fila_espera[posicao].head = fila_espera[posicao].tail = (Node*)malloc(sizeof(Node));
+    }
+    else{ // se nao esta vazio
+        fila_espera[posicao].tail->next = (Node*)malloc(sizeof(Node));
+        fila_espera[posicao].tail = fila_espera[posicao].tail->next;  
+    }
+    fila_espera[posicao].tail->id = ID;
+    fila_espera[posicao].tail->next = NULL; // serve para sabermos quando estiver vazio
+}
+
+void remover(int posicao){//remeove de tras
+    if(fila_espera[posicao].head == NULL){  //se esta vazio retorna
+        return;
+    }
+    fila_espera[posicao].head = fila_espera[posicao].head->next;
+}
+
+int id_front(int posicao){  // retorna id do head da list
+    return  fila_espera[posicao].head->id;
+}
+
+void print_list(int posicao){
+    Node* temp = fila_espera[posicao].head;
+    while(temp != NULL){
+        printf("%d ",temp->id);
+        temp = temp->next;
+    }
+    printf("\n");
+}
+
+// fim da linked list e suas funcoes
