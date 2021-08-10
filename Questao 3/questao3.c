@@ -5,10 +5,10 @@
 #include <math.h>
 
 typedef struct Estatisticas_sala{
-    int Media ;
-    int Moda ;
-    int Mediana ;
-    int desvio;
+    float Media ;
+    float Moda ;
+    float Mediana ;
+    float desvio;
 }Estatisticas_sala;
 
 
@@ -122,7 +122,10 @@ void consultar_sala(void* arg){
 
         // escolhi a abordagem de ler os arquivos sob demanda
         pthread_mutex_lock(mutex_sala);
-        if(salas_vistas == N_salas){return NULL;}       //ja vimos todas as salas
+        if(salas_vistas == N_salas){
+            pthread_mutex_unlock(mutex_sala);
+            return NULL;
+        }       //ja vimos todas as salas
             
         int num_sala = salas_vistas; 
         salas_vistas++;
@@ -153,7 +156,7 @@ int main(){
     printf("numero de threads: ");
     scanf("%d", &Nthreads);
     
-    estatistica = (int*)malloc(N_salas* sizeof(Estatisticas_sala));
+    estatistica = (float*)malloc(N_salas* sizeof(Estatisticas_sala));
 
 
 
