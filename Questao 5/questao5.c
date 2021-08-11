@@ -48,3 +48,8 @@ funexec é um nome utilizado para facilitar a explicação, e diferentes nomes p
 Você deverá utilizar variáveis de condição para evitar a espera ocupada. Lembre-se que essas variáveis precisam ser utilizadas em conjunto com mutexes.
  Mutexes deverão ser utilizados de forma refinada, no sentido que um recurso não deverá travar outro recurso independente.
 */
+
+// criar funcoes
+// criar  thread da fila
+// criar thread que coloca pra executar (e marca tal num array)
+// criar thread usuario
