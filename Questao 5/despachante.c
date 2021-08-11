@@ -14,6 +14,7 @@ void* threadespaxe(void* primeiro){
 
     pthread_mutex_lock(&mutex_despachante);
     inserir(&lista_resposta,retorno);
+    primeiro->pronto = true;
     pthread_cond_signal(primeiro->cond,primeiro->mutex);
     pthread_mutex_unlock(&mutex_despachante);
     return NULL;
