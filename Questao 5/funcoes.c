@@ -1,47 +1,60 @@
 #include <stdio.h>
 #include<stdlib.h>
-#define TAM 10
-#define true 1
-#define false 0
-int Vetor[TAM];
 
 typedef struct par{
     int first,second;
 }par;
 
-int print(void* arg){
+int somar(int num1, int num2);
+int subtrair(int num1, int num2);
+int multiplicar(int num1, int num2);
+int dividir(int num1, int num2);
 
-    int inicio = ((par*)arg)->first;
-    int fim = ((par*)arg)->second;
-    if(inicio < fim){
-        return false;
-    }
-    for(int i=inicio; i<fim; i++){
-        printf("%d ",Vetor[i]);
-    }
-    printf("\n");
-    return true;
+int (*operacao[4])(int, int);
+
+int main() 
+{
+    int x, y, choice, result;
+
+
+    operacao[0] = somar;
+    operacao[1] = subtrair;
+    operacao[2] = multiplicar;
+    operacao[3] = dividir;
+
+    result = operacao[choice](x, y);
+    printf("\n %d", result);
+
+    return 0;
+
 }
-int minimo(void *arg){
 
-    int inicio = ((par*)arg)->first;
-    int fim = ((par*)arg)->second;
+int somar (struct par P) {
+    int x = P.first;
+    int y = P.second;
     
-    int min = Vetor[0];
-    for(int i=inicio; i < fim; i++){
-        min = min > Vetor[i] ? Vetor[i] : min;
-    }
-    return min;
+    return(x + y);
 }
 
-int maximo(void *arg){
-    int inicio = ((par*)arg)->first;
-    int fim = ((par*)arg)->second;
-    
-    int max = Vetor[0];
-    for(int i=inicio; i < fim; i++){
-        max = max < Vetor[i] ? Vetor[i] : max;
-    }
-    return max;
+int subtrair (struct par P) {
+    int x = P.first;
+    int y = P.second;
+    return(x - y);
 }
 
+int multiplicar (struct par P) {
+    int x = P.first;
+    int y = P.second;
+    return(x * y);
+}
+
+int dividir (struct par P) {
+    int x = P.first;
+    int y = P.second;
+    if (y != 0){
+        return (x / y);
+    }
+    else{
+        return 0;
+    }
+} 

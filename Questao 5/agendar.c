@@ -12,10 +12,10 @@ int agendarExecucao(void* funcao, void *arg){
 
     new_node->funcao = funexec;
     new_node->arg = arg;
-    new_node->id = id;
+    
     new_node->mutex = personal_mutex;
     new_node->cond = personal_cond;
-    
+    new_node->pronto = false;
     insert(new_node);
 
     Node* id = new_node;

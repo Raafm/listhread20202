@@ -4,11 +4,12 @@ typedef struct Node {
 
     struct Node* next;
     struct Node* prev;
-    int id;
+
     void*funcao;
     void*arg;
     pthread_mutex_t* mutex;
     pthread_cond_t* cond;
+    int pronto;
 }Node;
 
 void unlink(Node* node1,Node* node2){
@@ -54,15 +55,15 @@ Node* remover(linked_list* fila){//remeove de tras
 }
 
 int id_front(linked_list* fila){  // retorna id do head da list
-    return  (*fila).head->id;
+    return  (*fila).head;
 }
 int id_back(linked_list* fila){ // retorna id do back da list
-    return (*fila).tail->id;
+    return (*fila).tail;
 }
 void print_list(linked_list* fila){
     Node* temp = (*fila).head;
     while(temp != NULL){
-        printf("%d ",temp->id);
+        printf("%d ",temp);
         temp = temp->next;
     }
     printf("\n");

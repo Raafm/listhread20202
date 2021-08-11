@@ -1,15 +1,15 @@
 
 void pegarResultadoExecucao(Node* id){//ninguem disse que o ID tem que ser um numero sequencial
     
-
-
-
+    personal_mutex = id->mutex;
+    personal_cond = id->cond;
+    
     while(true){
 
         pthread_mutex_lock(&espera_resultado); //tenta pegar resultado
         pthread_mutex_lock(&personal_mutex);
         
-        if (pronto()){
+        if (id.pronto){
             pthread_mutex_unlock(&espera_resultado);
             return resposta;
         }
