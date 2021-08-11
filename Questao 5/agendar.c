@@ -5,14 +5,19 @@
 
 int agendarExecucao(void* funcao, void *arg){
 
-    int id;
-    if(id_back()==INT_MAX){
-        id=1;
-    }
-    else{
-        id = 1+id_top();
-    }
-    insert(funcao,arg,id);
+    Node* new_node = (Node*)malloc(sizeof(Node));
 
+    pthread_mutex_t personal_mutex;
+    pthread_cond_t personal_cond;
+
+    new_node->funcao = funexec;
+    new_node->arg = arg;
+    new_node->id = id;
+    new_node->mutex = personal_mutex;
+    new_node->cond = personal_cond;
+    
+    insert(new_node);
+
+    Node* id = new_node;
     return id;
 }

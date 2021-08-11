@@ -3,54 +3,64 @@
 typedef struct Node {
 
     struct Node* next;
+    struct Node* prev;
     int id;
     void*funcao;
     void*arg;
+    pthread_mutex_t* mutex;
+    pthread_cond_t* cond;
 }Node;
+
+void unlink(Node* node1,Node* node2){
+    if(node1)node1->next = NULL;
+    if(node2)node2->prev = NULL;
+}
+void link(Node* node1,Node* node2){
+    node1->next = node2;
+    node2->prev = node1;
+}
 
 typedef struct linked_list{
     Node* head;
     Node* tail;
 }linked_list;
 
-linked_list fila_espera;
+linked_list lista_espera;
 
-int empty(){
-    return fila_espera.head == NULL;
+int empty(linked_list* fila){
+    return (*fila).head == NULL;
 }
 
-void inserir(void* funexec,void* ARG,int ID){   //insere na frente
+void inserir(linked_list* fila, Node*new_node){   //insere na frente
     
-    if(fila_espera.head == NULL){ // se esta vazio
-        fila_espera.head = fila_espera.tail = (Node*)malloc(sizeof(Node));
+    if((*fila).head == NULL){ // se esta vazio
+        (*fila).head = (*fila).tail = new_node
     }
     else{ // se nao esta vazio
-        fila_espera.tail->next = (Node*)malloc(sizeof(Node));
-        fila_espera.tail = fila_espera.tail->next;  
+        link((*fila).tail , new_node);
+        (*fila).tail = (*fila).tail->next;  
     }
-    fila_espera.tail->id = ID;
-    fila_espera.tail->funcao = funexec;
-    fila_espera.tail->arg = ARG;
-    fila_espera.tail->next = NULL; // serve para sabermos quando estiver vazio
+    (*fila).tail->next = NULL; // serve para sabermos quando estiver vazio
 }
 
-Node* remover(){//remeove de tras
-    if(fila_espera.head == NULL){  //se esta vazio retorna
+Node* remover(linked_list* fila){//remeove de tras
+    if((*fila).head == NULL){  //se esta vazio retorna
         return NULL;
     }
-    Node* retornado = fila_espera.head;
-    fila_espera.head = fila_espera.head->next;
+    Node* retornado = (*fila).head;
+    (*fila).head = (*fila).head->next;
+    unlink(retornado,(*fila).head); //evitar problemas, quebrar o vinculo coma linked list
     return retornado; //nao se esquecer de dar free depois de usar
 }
 
-int id_front(){  // retorna id do head da list
-    return  fila_espera.head->id;
+int id_front(linked_list* fila){  // retorna id do head da list
+    return  (*fila).head->id;
 }
-int id_back(){ // retorna id do back da list
-    return fila_espera.tail->id;
+int id_back(linked_list* fila){ // retorna id do back da list
+    return (*fila).tail->id;
 }
-void print_list(){
-    Node* temp = fila_espera.head;
+void print_list(linked_list* fila){
+    Node* temp = (*fila).head;
     while(temp != NULL){
         printf("%d ",temp->id);
         temp = temp->next;
