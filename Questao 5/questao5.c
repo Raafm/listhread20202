@@ -4,6 +4,40 @@
 #include <unistd.h>
 
 
+/*
+Ideia:
+Temos threads de usuario que ficam constantemente requisitando que a API faca alguma operaca.
+Os usuarios possuem acesso a 2 funcoes: 
+    (I) agendarExecucao, que retorna um Node com as informacoes da requisicao.
+    (II)pegarResultadoExecucao que retorna a resposta da operacao solicitada.
+
+A API trata as resquisicoes da seguinte forma:
+A funcao de agendarExecucao cria um Node para o usuario com:
+    (I)   a operacao e os parametros dela
+    (II)  um mutex e uma variavel de condicao feitos para acordar a thread do usuario e somente ela.
+    (III) uma variavel que indica o estado (pronto = false), e outra que indica a resposta.
+
+Coloca-se o node numa linked list de espera para ser executado. A linked list é uma regiao critica, portanto usa-se exclusao mutua para inserir nela.
+Por fim acorda-se a thread despachante, e retorna-se o endereco do node da requisicao para thread usuario.
+
+A thread despachante avalia se pode cirar threads para fazer o trabalho e depois ve se existe alguma operacao pendente na lista de espera para execucao.
+    se tiver como criar thread e houver requisicao,
+        a despachante remove o primeiro node da lista e cria uma thread para ele.
+        Ela repete isto ate nao poder mais (porque nao tem como fazer mais threads ou nao tem mais trabalhos).
+    se nao tiver a thread imediatamente volta ao wait().
+
+
+A thread que executa coloca os argumentos na funcao passada para ela e coloca no node a resposta, e muda o estado do node para pronto.
+A thread que executa coloca o node na lista de resposta (outra regiao critica), sinaliza 2 outras:
+    I)  a thread do usuario que fez a requisicao:  usando a funcao pegarResultadoExecucao, apos acordar para pegar a resposta no node que esta na lista de resposta.
+    II) a thread despachante: esta poderia estar dormindo esprando uma thread acabar a execucao para criar outra.
+
+A funcao pegarResultadoExecucao retorna a resposta se esta pronta, se nao esta pronta, wait().
+Apenas quando a resposta vai para o usuario, o node da requisicao e apagado.
+
+
+*/
+
 //================================================================ INICIO DA API =================================================================
 
 #define true 1
@@ -116,10 +150,10 @@ Node* id_back(linked_list* fila){ // retorna id do back da list
 void print_list(linked_list* fila){
     Node* temp = (*fila).head;
     while(temp != NULL){
-        printf("%d ",(int)temp);
+        printf("%d --->",(int)temp);
         temp = temp->next;
     }
-    printf("\n");
+    printf("NULL\n");
 }
 
 void apagar_fila(linked_list* fila){
@@ -151,6 +185,7 @@ int dividir(par P);
 
 Node* agendarExecucao(void* funexec, void *arg){
 
+    printf("\ncriando new_node\n");
     Node* new_node = (Node*)malloc(sizeof(Node)); //cria node
 
     // mutex e variavel de condicao pessoais para acordar exatamente a thread usuario desta requisicao
@@ -171,11 +206,15 @@ Node* agendarExecucao(void* funexec, void *arg){
     inserir(&lista_espera,new_node);
     pthread_mutex_unlock(&espera_agendamento);
 
-    // acordar thread despachante para colocar a solicitacao em alguma thread para executar 
+    // acordar thread despachante para colocar a solicitacao em alguma thread para executar
+    printf("\nacorda despachante para tratar requisicao\n"); 
     pthread_cond_signal(&despache_ok);
 
+    printf("\nretornando new_node\n");
     Node*id = new_node; // retorna node para poder pegar a resposta
-
+    
+    printf("estado da lista de espera:\n");
+    print_list(&lista_espera);
     return id;
 }
 
@@ -204,7 +243,7 @@ int pegarResultadoExecucao(Node* id){
             return Resposta;
         }
         else{
-            printf("\nresposta nao esta pronta, libera mutex\n");
+            printf("\nresposta nao esta pronta\n");
             pthread_mutex_unlock(&espera_resultado);  //unlock para outros poderem pegar 
             printf("dorme enquanto espera\n\n");
             pthread_cond_wait(personal_cond,personal_mutex);//acordo exatamente esta thread quando terminar.
@@ -224,12 +263,11 @@ void* threadespaxe(void* primeiro){
     //variaveis criadas para deixar codigo mais limpo
     struct Node* node = (struct Node*)primeiro;
     par argumento;
-
+        
   
     argumento = *((par*)(node->arg));
     
     
-
     printf("argumento: (%d,%d)\n", argumento.first,argumento.second);    
 
 
@@ -254,22 +292,24 @@ void* threadespaxe(void* primeiro){
 
 void* despachar(void*arg){
                               //numeros de threads sendo executadas
-   
+    printf("\ndespachante on\n");
     while(true){
 
         pthread_mutex_lock(&mutex_despachante);
 
         while(executando == N || empty(&lista_espera)){
-               
+            printf("\nlista vazia\n"); 
             pthread_cond_wait(&despache_ok,&mutex_despachante);
         }
         
         //pega da lista
+        printf("\ndespachante pega primeiro da lista para executar\n");
         executando++;
         Node*primeiro = remover(&lista_espera);
 
         pthread_mutex_unlock(&mutex_despachante);
 
+        printf("cria thread para executar\n");
         pthread_t thread;
         pthread_create(&thread,NULL,threadespaxe,primeiro);
 
@@ -284,6 +324,7 @@ void* despachar(void*arg){
 void inicia_API(){
     lista_espera.head = lista_espera.tail = lista_resposta.head = lista_resposta.tail = NULL;
     pthread_create(&despache,NULL,despachar,NULL);
+
 }
 
 void free_API(){
@@ -292,6 +333,7 @@ void free_API(){
     free(&lista_resposta);
     free(&lista_espera);
     printf("API finalizada\n");
+    
 }
 
 // ========================================================================  FIM DA API  =======================================================================
@@ -318,16 +360,16 @@ void* importunar(void* arg){
         switch(N_operacao){
 
             case 0:
-                id = agendarExecucao(&somar,pointer_pair(x,y)); 
+                id = agendarExecucao(somar,pointer_pair(x,y)); 
                 break;
             case 1:
-                id = agendarExecucao(&subtrair,pointer_pair(x,y)); 
+                id = agendarExecucao(subtrair,pointer_pair(x,y)); 
                 break;
             case 2:
-                id = agendarExecucao(&multiplicar,pointer_pair(x,y)); 
+                id = agendarExecucao(multiplicar,pointer_pair(x,y)); 
                 break;
             case 3:
-                id = agendarExecucao(&dividir,pointer_pair(x,y)); 
+                id = agendarExecucao(dividir,pointer_pair(x,y)); 
                 break;
 
         }
