@@ -1,4 +1,4 @@
-#include<stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -6,7 +6,8 @@
 
 //================================================================ INICIO DA API =================================================================
 
-
+#define true 1
+#define false 0
 #define N 5                             // numero maximo de threads em execucao
 
 int executando = 0;                     // numero de threads em execucao
@@ -39,12 +40,12 @@ typedef struct Node {
 }Node;
 
 
-void unlink(Node* node1,Node* node2){
+void Unlink(Node* node1,Node* node2){
     if(node1)node1->next = NULL;
     if(node2)node2->prev = NULL;
 }
 
-void link(Node* node1,Node* node2){
+void Link(Node* node1,Node* node2){
     if(node1)node1->next = node2;
     if(node2)node2->prev = node1;
 }
@@ -62,10 +63,10 @@ int empty(linked_list* fila){
 void inserir(linked_list* fila, Node*new_node){   //insere na frente
     
     if((*fila).head == NULL){ // se esta vazio
-        (*fila).head = (*fila).tail = new_node
+        (*fila).head = (*fila).tail = new_node;
     }
     else{ // se nao esta vazio
-        link((*fila).tail , new_node);
+        Link((*fila).tail , new_node);
         (*fila).tail = (*fila).tail->next;  
     }
     (*fila).tail->next = NULL; // serve para sabermos quando estiver vazio
@@ -77,31 +78,31 @@ Node* remover(linked_list* fila){//remeove de tras
     }
     Node* retornado = (*fila).head;
     (*fila).head = (*fila).head->next;
-    unlink(retornado,(*fila).head); //evitar problemas, quebrar o vinculo coma linked list
+    Unlink(retornado,(*fila).head); //evitar problemas, quebrar o vinculo coma linked list
     return retornado; //nao se esquecer de dar free depois de usar
 }
 
-int id_front(linked_list* fila){  // retorna id do head da list
+Node* id_front(linked_list* fila){  // retorna id do head da list
     return  (*fila).head;
 }
-int id_back(linked_list* fila){ // retorna id do back da list
+Node* id_back(linked_list* fila){ // retorna id do back da list
     return (*fila).tail;
 }
 
 void print_list(linked_list* fila){
     Node* temp = (*fila).head;
     while(temp != NULL){
-        printf("%d ",temp);
+        printf("%d ",(int)temp);
         temp = temp->next;
     }
     printf("\n");
 }
 
 void apagar_fila(linked_list* fila){
-    Node* temp = remover(*fila);
+    Node* temp = remover(fila);
     while(temp != NULL){
         free(temp);
-        temp = remover(*fila);
+        temp = remover(fila);
     }
     printf("fila apagada\n");
 }
@@ -120,12 +121,21 @@ typedef struct par{
     int first,second;
 }par;
 
-int somar(int num1, int num2);
-int subtrair(int num1, int num2);
-int multiplicar(int num1, int num2);
-int dividir(int num1, int num2);
+void* pointer_pair(int x, int y){
+    struct par* P;
+    P->first = x;
+    P->second = y;
+    return (void*)P;
+}
 
-int (*operacao[4])(int, int);           //array de ponteiro para as funcoes
+
+
+int somar(par P);
+int subtrair(par P);
+int multiplicar(par P);
+int dividir(par P);
+
+int (*operacao[4])(par P);           //array de ponteiro para as funcoes
 
 
 
@@ -133,7 +143,7 @@ int (*operacao[4])(int, int);           //array de ponteiro para as funcoes
 
 //-----------------------------------------------------------------    funcoes da interface da API    ---------------------------------------------------------
 
-Node* agendarExecucao(void* funcao, void *arg){
+Node* agendarExecucao(void* funexec, void *arg){
 
     Node* new_node = (Node*)malloc(sizeof(Node));
 
@@ -143,15 +153,15 @@ Node* agendarExecucao(void* funcao, void *arg){
     new_node->funcao = funexec;
     new_node->arg = arg;
     
-    new_node->mutex = personal_mutex;
-    new_node->cond = personal_cond;
+    new_node->mutex = &personal_mutex;
+    new_node->cond = &personal_cond;
     new_node->resposta = NULL;
 
     pthread_mutex_lock(&espera_agendamento);
-    insert(new_node);
+    inserir(&lista_espera,new_node);
     pthread_mutex_unlock(&espera_agendamento);
 
-    pthread_cond_signal(&despache_ok,&mutex_despachante); //acorda despachante
+    pthread_cond_signal(&despache_ok); //acorda despachante
 
     Node* id = new_node;
     return id;
@@ -164,25 +174,25 @@ Node* agendarExecucao(void* funcao, void *arg){
 
                                              
 
-void pegarResultadoExecucao(Node* id){//ninguem disse que o ID tem que ser um numero sequencial
+int pegarResultadoExecucao(Node* id){//ninguem disse que o ID tem que ser um numero sequencial
     
-    personal_mutex = id->mutex;
-    personal_cond = id->cond;
+    pthread_mutex_t* personal_mutex = id->mutex;
+    pthread_cond_t* personal_cond = id->cond;
     int resposta;
     while(true){
 
         pthread_mutex_lock(&espera_resultado); //tenta pegar resultado
-        pthread_mutex_lock(&personal_mutex);
+        pthread_mutex_lock(personal_mutex);
         
         if (id->resposta){
-            resposta = id->resposta;
+            resposta = *(id->resposta);
             pthread_mutex_unlock(&espera_resultado);
             free(id); //finalmente o Node pode ser apagado
             return resposta;
         }
         else{
             pthread_mutex_unlock(&espera_resultado);  //unlock para outros tentarem pegar 
-            pthread_cond_wait(&personal_cond,&personal_mutex);//acordem esta thread quando terminar.
+            pthread_cond_wait(personal_cond,personal_mutex);//acordem esta thread quando terminar.
             //colocar VARIAVEL DE CONDICAO UNICA PARA CADA THREAD QUE ESPERA DENTRO DA LINKED LIST
             //QUANDO CHEGAR NA RESPOSTA, ACORDA PRECISAMENTE A QUE DORMIU 
 
@@ -200,19 +210,20 @@ void pegarResultadoExecucao(Node* id){//ninguem disse que o ID tem que ser um nu
                                                             // thread despachante
 
 void* threadespaxe(void* primeiro){
-    void*funcexec = primeiro->funcao;                       // pega funcao
 
-    primeiro->resposta = (int*)malloc(sizeof(int));
-    *(primeiro->resposta) = funcexec(arg);                  // executa a funcao e guarda ela no Node
+    int(*funcexec)(par) = ((struct Node*)primeiro)->funcao;                       // pega funcao
+    void* argumento = (((struct Node*)primeiro)->arg);
+    ((struct Node*)primeiro)->resposta = (int*)malloc(sizeof(int));
+    *(((struct Node*)primeiro)->resposta) = funcexec(  *((par*)argumento)  );                  // executa a funcao e guarda ela no Node
 
     pthread_mutex_lock(&inserir_resposta);                 // exclusao mutua na regiao critica
     inserir(&lista_resposta,primeiro);                      // insere na lista de resposta
     pthread_mutex_unlock(&inserir_resposta);
 
-    pthread_cond_signal(primeiro->cond,primeiro->mutex);    //acorda apenas a thread do usuario que fez esta requisicao
+    pthread_cond_signal(((struct Node*)primeiro)->cond);    //acorda apenas a thread do usuario que fez esta requisicao
     
     executando--;
-    pthread_cond_signal(&despache_ok,&mutex_despachante);
+    pthread_cond_signal(&despache_ok);
     return NULL;
 }
 
@@ -251,9 +262,9 @@ void inicia_API(){
 
 void free_API(){
     apagar_fila(&lista_resposta);
-    apagar_fila(&lista_espera)
-    free(lista_resposta);
-    free(lista_espera);
+    apagar_fila(&lista_espera);
+    free(&lista_resposta);
+    free(&lista_espera);
     printf("API finalizada\n");
 }
 
@@ -265,7 +276,7 @@ void free_API(){
 
 
 
-void importunar(void* arg){
+void* importunar(void* arg){
     
     int self_id = *((int*)arg);
 
