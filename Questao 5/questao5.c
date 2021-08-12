@@ -27,12 +27,26 @@ pthread_mutex_t espera_agendamento =PTHREAD_MUTEX_INITIALIZER;;     // mutex par
 
                                                             //linked list
 
+
+typedef struct par{
+    int first,second;
+}par;
+
+void* pointer_pair(int x, int y){
+    struct par* P = (par*)malloc(sizeof(struct par));
+    P->first = x;
+    P->second = y;
+    return (void*)P;
+}
+
+
+
 typedef struct Node {
 
     struct Node* next;
     struct Node* prev;
 
-    void*funcao;
+    int(*funcao)(struct par);
     void*arg;
 
     pthread_mutex_t* mutex;
@@ -124,28 +138,10 @@ linked_list lista_resposta;
 
 
 
-
-
-
-typedef struct par{
-    int first,second;
-}par;
-
-void* pointer_pair(int x, int y){
-    struct par* P = (par*)malloc(sizeof(struct par));
-    P->first = x;
-    P->second = y;
-    return (void*)P;
-}
-
-
-
 int somar(par P);
 int subtrair(par P);
 int multiplicar(par P);
-int dividir(par P);
-
-int (*operacao[4])(par P);           //array de ponteiro para as funcoes
+int dividir(par P);     
 
 
 
@@ -178,7 +174,7 @@ Node* agendarExecucao(void* funexec, void *arg){
     // acordar thread despachante para colocar a solicitacao em alguma thread para executar 
     pthread_cond_signal(&despache_ok);
 
-    Node* id = new_node; // retorna node para poder pegar a resposta
+    Node*id = new_node; // retorna node para poder pegar a resposta
 
     return id;
 }
@@ -228,16 +224,16 @@ void* threadespaxe(void* primeiro){
     //variaveis criadas para deixar codigo mais limpo
     struct Node* node = (struct Node*)primeiro;
     par argumento;
-    void* funexec;
+
   
     argumento = *((par*)(node->arg));
     
-    funexec = node->funcao;
-
     
-    printf("argumento: (%d,%d)\n", argumento.first,argumento.second);
 
-    node->resposta = funexec(argumento);    
+    printf("argumento: (%d,%d)\n", argumento.first,argumento.second);    
+
+
+    node->resposta = (node->funcao)(argumento);    
 
     printf("resposta: %d\n\n",node->resposta);
 
@@ -311,15 +307,31 @@ void* importunar(void* arg){
     int self_id = *((int*)arg);
     printf("\nusuario %d conectado\n", self_id);
     while(true){
-        int N_operacao = rand()%4;
 
-        void*funcao = (void*)operacao[N_operacao];
-        
+        int N_operacao = rand()%4;
         int x = rand() % 10,    y = rand() % 10;
 
-        printf("\nususario[%d] tenta agendar:\noperacao[%d](%d,%d)\n",self_id,N_operacao,x,y);
+        printf("\nususario[%d] tenta agendar:\noperacao[%d](%d,%d)\n",self_id,N_operacao,x,y);   
+        
+        Node* id;
+        
+        switch(N_operacao){
 
-        Node* id = agendarExecucao(funcao,pointer_pair(x,y));   
+            case 0:
+                id = agendarExecucao(&somar,pointer_pair(x,y)); 
+                break;
+            case 1:
+                id = agendarExecucao(&subtrair,pointer_pair(x,y)); 
+                break;
+            case 2:
+                id = agendarExecucao(&multiplicar,pointer_pair(x,y)); 
+                break;
+            case 3:
+                id = agendarExecucao(&dividir,pointer_pair(x,y)); 
+                break;
+
+        }
+  
 
         printf("\nusario[%d] tenta pegar resultado\n",self_id);
 
@@ -343,6 +355,7 @@ int main(){
 
     inicia_API();
 
+
     for(int i = 0; i < N_users; i++){
         id_usuario[i] = i;
         pthread_create(&usuario[i], NULL, importunar,&id_usuario[i]);
@@ -353,7 +366,7 @@ int main(){
     }
 
     free_API();
-    free(operacao);
+   
     return 0;
 }
 
