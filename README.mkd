@@ -1,0 +1,39 @@
+# Dentro de algumas pastas das questões da lista de threads tem 2 programas:
+
+## 1) o das respostas eficiente:       e     2) um user friendly. (no formato: QN_user_friendly.c, em que N é o número da questão)
+A razão de ser da dúplice resposta é a melhor/mais rápida compreensão,  pois em algumas questões, ao meu ver não triviais, podem consumir algum tempo para entender o funcionamento das threads. Pensando nisso, e sabendo que final de período é difícil para os professores, a versão User Friendly é feita exatamente para mostrar no terminal o andamento das execuções das threads facilitando a correção, enquanto o outro arquivo evita a perda de eficiência com printf() e sleep() e também é um pouco mais limpo para ler. 
+
+Como não sei se o Senhor avalia mais a lógica das threads (nesse caso melhor ver os arquivos user_friendly e acompanhar a execução no terminal), ou se o senhor prefere ver mais eficiência (nesse caso melhor ver os outros arquivos), enviei os dois arquivos.
+
+### Os arquivos 'User Friendly' possuem explicações mais detalhadas dos algoritmos usados, como no caso da questão 8 (dos números primos).
+
+Além disso,
+# Sobre a questão 8,
+em sala eu perguntei se poderia fazer usando o algoritmo do crivo, pois ele é mais veloz (e a princípio achei que a implementação das threads seria mais simples),
+e o senhor deixou.
+ Para fazer uma análise comparativa, fiz uma animação de 3 min do algoritmo sugerido, e do crivo . 
+
+A animação compara o crivo ('Sieve' em inglês) para achar os primos até 8400 com a abordagem de dividir por todos os números até a raiz
+para achar todos os primos até 2100 (4 vezes menos que o crivo).
+
+Nela, durante a execução da abordagem de testar todos (até a raiz): amarelo == número não visto,     verde == primo,    branco == número não primo e   vermelho == avaliando resto de divisão
+
+Porém, durante a abordagem do crivo, azul significa que foi marcado provisoriamente no array do crivo (e_primo) como verdade (seguindo a lógica do algoritmo),
+vermelho == foi eliminado no algoritmo do crivo, preto == não é primo, branco ==número primo
+
+
+A outra animação (segue anexa a este e-mail), de 1 minuto, mostra a atuação conjunta de 4 threads para fazer as contas do crivo e achar os primos menores que 16800.
+
+Nesse caso: branco == primo no array e_primo (no algoritmo supostamente todos começam como primos), preto ou cinza == não primo, qualquer outra cor == eliminado
+
+No final do algoritmo eu passei linearmente pelo array coletando todos os primos dele (deixando de branco quem realmente era primo e pintando de cinza quem não era).
+
+
+
+Enviarei em anexo a animação de um minuto (das threads),  caso tenha problemas com elas pelo site de submissões. ( também se tiver algum erro na implementação o Senhor já me corrige)
+OBS: O último número olhado nas threads (16799) é  mostrado por elas, mas não entra na lista de primos .
+Os outros números vistos nas threads são todos primos, indicam em que número a thread está trabalhando.
+Os últimos primos vistos são:16787, 16763 e 16759.
+
+Grato pela atenção, desculpe o incômodo.
+
