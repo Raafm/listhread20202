@@ -12,13 +12,13 @@
 
 int executando = 0;                     // numero de threads em execucao
 pthread_cond_t despache_ok;             // variavel de condicao relacionada a thread despachante
-pthread_mutex_t mutex_despachante;      // mutex relacionado a thread despachante
+pthread_mutex_t mutex_despachante = PTHREAD_MUTEX_INITIALIZER;;      // mutex relacionado a thread despachante
 pthread_t despache;                     //thread de despache
 
-pthread_mutex_t inserir_resposta;       // mutex para exclusao mutua para produzir na fila de respostas     
-pthread_mutex_t espera_resultado;       // mutex para exclusao mutua para consumir na fila de resposta
+pthread_mutex_t inserir_resposta = PTHREAD_MUTEX_INITIALIZER;;       // mutex para exclusao mutua para produzir na fila de respostas     
+pthread_mutex_t espera_resultado = PTHREAD_MUTEX_INITIALIZER;;       // mutex para exclusao mutua para consumir na fila de resposta
 
-pthread_mutex_t espera_agendamento;     // mutex para exclusao mutua na fila de tarefas agendadas 
+pthread_mutex_t espera_agendamento =PTHREAD_MUTEX_INITIALIZER;;     // mutex para exclusao mutua na fila de tarefas agendadas 
 
 
 
@@ -34,11 +34,21 @@ typedef struct Node {
 
     void*funcao;
     void*arg;
+
     pthread_mutex_t* mutex;
     pthread_cond_t* cond;
-    int* resposta;
+    
+    int resposta;
+    int pronto;
 }Node;
 
+void apaga_node(Node*node){
+    free(node->funcao);
+    free(node->arg);
+    free(node->mutex);
+    free(node->cond);
+    free(node);
+}
 
 void Unlink(Node* node1,Node* node2){
     if(node1)node1->next = NULL;
@@ -122,7 +132,7 @@ typedef struct par{
 }par;
 
 void* pointer_pair(int x, int y){
-    struct par* P;
+    struct par* P = (par*)malloc(sizeof(struct par));
     P->first = x;
     P->second = y;
     return (void*)P;
@@ -145,25 +155,31 @@ int (*operacao[4])(par P);           //array de ponteiro para as funcoes
 
 Node* agendarExecucao(void* funexec, void *arg){
 
-    Node* new_node = (Node*)malloc(sizeof(Node));
+    Node* new_node = (Node*)malloc(sizeof(Node)); //cria node
 
-    pthread_mutex_t personal_mutex;
+    // mutex e variavel de condicao pessoais para acordar exatamente a thread usuario desta requisicao
+    pthread_mutex_t personal_mutex; 
     pthread_cond_t personal_cond;
 
+    // informacoes para executar as funcoes
     new_node->funcao = funexec;
     new_node->arg = arg;
-    
+
+    // guarda no node info para retornar resposta e acordar thread usuario para recebe-la
     new_node->mutex = &personal_mutex;
     new_node->cond = &personal_cond;
-    new_node->resposta = NULL;
+    new_node->pronto = false;  // enquanto nao tem resposta 
 
+    // lista de espera para agendar: regiao critica. 
     pthread_mutex_lock(&espera_agendamento);
     inserir(&lista_espera,new_node);
     pthread_mutex_unlock(&espera_agendamento);
 
-    pthread_cond_signal(&despache_ok); //acorda despachante
+    // acordar thread despachante para colocar a solicitacao em alguma thread para executar 
+    pthread_cond_signal(&despache_ok);
 
-    Node* id = new_node;
+    Node* id = new_node; // retorna node para poder pegar a resposta
+
     return id;
 }
 
@@ -173,33 +189,31 @@ Node* agendarExecucao(void* funexec, void *arg){
 
 
                                              
+// o id usado pra pegar o resultado e o endereco de um Node
+int pegarResultadoExecucao(Node* id){
 
-int pegarResultadoExecucao(Node* id){//ninguem disse que o ID tem que ser um numero sequencial
-    
     pthread_mutex_t* personal_mutex = id->mutex;
     pthread_cond_t* personal_cond = id->cond;
-    int resposta;
-    while(true){
 
+    int Resposta;
+    while(true){
+  
         pthread_mutex_lock(&espera_resultado); //tenta pegar resultado
         pthread_mutex_lock(personal_mutex);
-        
-        if (id->resposta){
-            resposta = *(id->resposta);
+  
+        if (id->pronto){
+            Resposta = (id->resposta);
             pthread_mutex_unlock(&espera_resultado);
-            free(id); //finalmente o Node pode ser apagado
-            return resposta;
+            apaga_node(id); //finalmente o Node pode ser apagado
+            return Resposta;
         }
         else{
-            pthread_mutex_unlock(&espera_resultado);  //unlock para outros tentarem pegar 
-            pthread_cond_wait(personal_cond,personal_mutex);//acordem esta thread quando terminar.
-            //colocar VARIAVEL DE CONDICAO UNICA PARA CADA THREAD QUE ESPERA DENTRO DA LINKED LIST
-            //QUANDO CHEGAR NA RESPOSTA, ACORDA PRECISAMENTE A QUE DORMIU 
-
+            printf("\nresposta nao esta pronta, libera mutex\n");
+            pthread_mutex_unlock(&espera_resultado);  //unlock para outros poderem pegar 
+            printf("dorme enquanto espera\n\n");
+            pthread_cond_wait(personal_cond,personal_mutex);//acordo exatamente esta thread quando terminar.
         }
-
     }
-
 }
 
 
@@ -211,19 +225,32 @@ int pegarResultadoExecucao(Node* id){//ninguem disse que o ID tem que ser um num
 
 void* threadespaxe(void* primeiro){
 
-    int(*funcexec)(par) = ((struct Node*)primeiro)->funcao;                       // pega funcao
-    void* argumento = (((struct Node*)primeiro)->arg);
-    ((struct Node*)primeiro)->resposta = (int*)malloc(sizeof(int));
-    *(((struct Node*)primeiro)->resposta) = funcexec(  *((par*)argumento)  );                  // executa a funcao e guarda ela no Node
+    //variaveis criadas para deixar codigo mais limpo
+    struct Node* node = (struct Node*)primeiro;
+    par argumento;
+    void* funexec;
+  
+    argumento = *((par*)(node->arg));
+    
+    funexec = node->funcao;
 
-    pthread_mutex_lock(&inserir_resposta);                 // exclusao mutua na regiao critica
+    
+    printf("argumento: (%d,%d)\n", argumento.first,argumento.second);
+
+    node->resposta = funexec(argumento);    
+
+    printf("resposta: %d\n\n",node->resposta);
+
+    pthread_mutex_lock(&inserir_resposta);                  // exclusao mutua na regiao critica
     inserir(&lista_resposta,primeiro);                      // insere na lista de resposta
     pthread_mutex_unlock(&inserir_resposta);
 
-    pthread_cond_signal(((struct Node*)primeiro)->cond);    //acorda apenas a thread do usuario que fez esta requisicao
+    pthread_cond_signal(node->cond);    //acorda apenas a thread do usuario que fez esta requisicao
     
     executando--;
-    pthread_cond_signal(&despache_ok);
+    node->pronto = true;
+
+    pthread_cond_signal(&despache_ok);                     // acorda despachante, para executar nova requisicao
     return NULL;
 }
 
@@ -231,17 +258,20 @@ void* threadespaxe(void* primeiro){
 
 void* despachar(void*arg){
                               //numeros de threads sendo executadas
-    
+   
     while(true){
 
         pthread_mutex_lock(&mutex_despachante);
 
         while(executando == N || empty(&lista_espera)){
+               
             pthread_cond_wait(&despache_ok,&mutex_despachante);
         }
+        
         //pega da lista
         executando++;
         Node*primeiro = remover(&lista_espera);
+
         pthread_mutex_unlock(&mutex_despachante);
 
         pthread_t thread;
@@ -279,21 +309,22 @@ void free_API(){
 void* importunar(void* arg){
     
     int self_id = *((int*)arg);
-
+    printf("\nusuario %d conectado\n", self_id);
     while(true){
-        int N_operacao = rand() % 4;
-        void*funcao = operacao[N_operacao];
+        int N_operacao = rand()%4;
+
+        void*funcao = (void*)operacao[N_operacao];
         
         int x = rand() % 10,    y = rand() % 10;
 
-        printf("ususario[%d] tenta agendar\n",self_id);
+        printf("\nususario[%d] tenta agendar:\noperacao[%d](%d,%d)\n",self_id,N_operacao,x,y);
 
         Node* id = agendarExecucao(funcao,pointer_pair(x,y));   
 
-        printf("usario[%d] tenta pegar resultado\n",self_id);
+        printf("\nusario[%d] tenta pegar resultado\n",self_id);
 
         int resposta = pegarResultadoExecucao(id);   
-        printf("usuario[%d] pegou resultado:\noperacao[%d](%d,%d) = %d\n\n",self_id,N_operacao,x,y,resposta);
+        printf("\nusuario[%d] pegou resultado:\noperacao[%d](%d,%d) = %d\n\n",self_id,N_operacao,x,y,resposta);
 
     }
 
