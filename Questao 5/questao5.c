@@ -213,7 +213,12 @@ Node* agendarExecucao(void* funexec, void *arg){
 
     // lista de espera para agendar: regiao critica. 
     pthread_mutex_lock(&mutex_fila_agendamento);
+
     inserir(&lista_agendamento,new_node);
+    
+    printf("estado da lista de espera:\n");
+    print_list(&lista_agendamento);
+
     pthread_mutex_unlock(&mutex_fila_agendamento);
 
     // acordar thread despachante para colocar a solicitacao em alguma thread para executar
@@ -223,8 +228,9 @@ Node* agendarExecucao(void* funexec, void *arg){
     printf("\nretornando new_node\n");
     Node*id = new_node; // retorna node para poder pegar a resposta
     
-    printf("estado da lista de espera:\n");
-    print_list(&lista_agendamento);
+    
+    
+    
     return id;
 }
 
