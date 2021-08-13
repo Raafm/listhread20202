@@ -46,13 +46,11 @@ Apenas quando a resposta vai para o usuario, o node da requisicao e apagado.
 
 int executando = 0;                     // numero de threads em execucao
 pthread_cond_t despache_ok;             // variavel de condicao relacionada a thread despachante
-pthread_mutex_t mutex_despachante = PTHREAD_MUTEX_INITIALIZER;;      // mutex relacionado a thread despachante
+pthread_mutex_t mutex_despachante = PTHREAD_MUTEX_INITIALIZER;      // mutex relacionado a thread despachante
 pthread_t despache;                     //thread de despache
 
-pthread_mutex_t inserir_resposta = PTHREAD_MUTEX_INITIALIZER;;       // mutex para exclusao mutua para produzir na fila de respostas     
-pthread_mutex_t mutex_fila_resultado = PTHREAD_MUTEX_INITIALIZER;;       // mutex para exclusao mutua para consumir na fila de resposta
-
-pthread_mutex_t mutex_fila_agendamento =PTHREAD_MUTEX_INITIALIZER;;     // mutex para exclusao mutua na fila de tarefas agendadas 
+pthread_mutex_t mutex_fila_resultado = PTHREAD_MUTEX_INITIALIZER;       // mutex para exclusao mutua na fila de respostas prontas   
+pthread_mutex_t mutex_fila_agendamento =PTHREAD_MUTEX_INITIALIZER;     // mutex para exclusao mutua na fila de tarefas agendadas 
 
 
 
@@ -201,7 +199,7 @@ Node* agendarExecucao(void* funexec, void *arg){
     Node* new_node = (Node*)malloc(sizeof(Node)); //cria node
 
     // mutex e variavel de condicao pessoais para acordar exatamente a thread usuario desta requisicao
-    pthread_mutex_t personal_mutex; 
+    pthread_mutex_t personal_mutex = PTHREAD_MUTEX_INITIALIZER; 
     pthread_cond_t personal_cond;
 
     // informacoes para executar as funcoes
@@ -290,9 +288,9 @@ void* threadespaxe(void* primeiro){
 
     printf("resposta: %d\n\n",node->resposta);
 
-    pthread_mutex_lock(&inserir_resposta);                  // exclusao mutua na regiao critica
+    pthread_mutex_lock(&mutex_fila_resultado);                  // exclusao mutua na regiao critica
     inserir(&lista_resposta,primeiro);                      // insere na lista de resposta
-    pthread_mutex_unlock(&inserir_resposta);
+    pthread_mutex_unlock(&mutex_fila_resultado);
     
     
     node->pronto = true;
