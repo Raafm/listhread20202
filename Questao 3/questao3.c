@@ -4,6 +4,47 @@
 #include <unistd.h>
 #include <math.h>
 
+
+
+
+
+void swap(float* a, float* b) { 
+    float t = *a; 
+    *a = *b; 
+    *b = t; 
+} 
+ 
+int particao (float arr[], int low, int high) { 
+    int pivot = arr[high];  
+    int i = (low - 1);
+  
+    for (int j = low; j <= high - 1; j++){ 
+         
+        if (arr[j] < pivot) { 
+            i++;
+            swap(&arr[i], &arr[j]); 
+        } 
+    } 
+    swap(&arr[i + 1], &arr[high]); 
+    return (i + 1); 
+} 
+  
+
+void quickSort(float arr[], int low, int high) { 
+    if (low < high){ 
+    
+        int pi = particao(arr, low, high); 
+  
+       
+        quickSort(arr, low, pi - 1); 
+        quickSort(arr, pi + 1, high); 
+    } 
+} 
+
+
+
+
+
 typedef struct Estatisticas_sala{
     float Media ;
     float Moda ;
@@ -19,10 +60,6 @@ int Nthreads;
 pthread_mutex_t mutex_sala = PTHREAD_MUTEX_INITIALIZER; // para a sala
 
 
-//funcao auxiliar para o qsort
-float comparadora (const void * a, const void * b){
-    return ( *(float*)a - *(float*)b );
-}
 
 
 //funcoes matematicas para as estatisticas de cada sala. Vale lembrar que nota[N] esta sortido (passou pelo quick sort antes das funcoes serem chamadas)
@@ -94,21 +131,21 @@ void ler_arquivo(int num_sala, float* nota,int* tam,int* top){
         for(int i = 0; i < *tam; i++ ){
 
             if(fgets(linha, 100, sala) != NULL){
-                sscanf(linha, "%s %d", aluno , &nota[(*top)++]);  
+                sscanf(linha, "%s %f", aluno , &nota[(*top)++]);  
             }
             else eof = 1;
         }
 
         if(!eof){       //ainda tem linha para ler com notas, mas acabou o espaco, dobro o tamanho e continuo
             (*tam) *= 2;
-            nota = realloc(nota, (*tam)*sizeof(nota));
+            nota = (float*)realloc(nota, (*tam)*sizeof(nota));
         }
     }
     fclose(sala);
 }
 
 void operacoes(float * nota, int tam, int num_sala){
-        qsort (nota, tam, sizeof(int), comparadora);
+        quickSort (nota, 0,tam-1);
 
         estatistica[num_sala].Media    =   media(nota,tam);
         estatistica[num_sala].Moda     =   moda(nota,tam);
@@ -116,20 +153,20 @@ void operacoes(float * nota, int tam, int num_sala){
         estatistica[num_sala].desvio   =   desvio(nota,tam);
 }
 
-void consultar_sala(void* arg){
+void* consultar_sala(void* arg){
 
     while(1){
 
         // escolhi a abordagem de ler os arquivos sob demanda
-        pthread_mutex_lock(mutex_sala);
+        pthread_mutex_lock(&mutex_sala);
         if(salas_vistas == N_salas){
-            pthread_mutex_unlock(mutex_sala);
+            pthread_mutex_unlock(&mutex_sala); //para as outras threads terminarem
             return NULL;
         }       //ja vimos todas as salas
             
         int num_sala = salas_vistas; 
         salas_vistas++;
-        pthread_mutex_unlock(mutex_sala);
+        pthread_mutex_unlock(&mutex_sala);
 
      
         float* nota = (float*)malloc(sizeof(float)*20); //vetor de notas para depois tirar media, mediana, etc
@@ -156,7 +193,7 @@ int main(){
     printf("numero de threads: ");
     scanf("%d", &Nthreads);
     
-    estatistica = (float*)malloc(N_salas* sizeof(Estatisticas_sala));
+    estatistica = (Estatisticas_sala*)malloc(N_salas* sizeof(Estatisticas_sala));
 
 
 
@@ -168,11 +205,13 @@ int main(){
         pthread_create(&threads[sala_Vazia], NULL,consultar_sala,NULL);
     }
 
-    for(int i = 0; i < Nthreads; i++)
+    for(int i = 0; i < Nthreads; i++){
         pthread_join(threads[i], NULL);
+    }
 
     for(int i =0; i < N_salas; i++){
-        printf("Sala X\nMedia: %f\nModa: %f\nMediana: %f\nDesvio Padrão: %f\n\n ");
+        printf("Sala X\nMedia: %f\nModa: %f\nMediana: %f\nDesvio Padrão: %f\n\n ",
+        estatistica[i].Media,estatistica[i].Moda,estatistica[i].Mediana,estatistica[i].desvio);
     }
     return 0;
 }

@@ -239,6 +239,11 @@ int pegarResultadoExecucao(Node* id){
         if (id->pronto){
             Resposta = (id->resposta);
             pthread_mutex_unlock(&espera_resultado);
+
+            pthread_mutex_lock(&inserir_resposta);
+            remover(&lista_resposta);
+            pthread_mutex_unlock(&inserir_resposta);
+
             apaga_node(id); //finalmente o Node pode ser apagado
             return Resposta;
         }
@@ -278,11 +283,13 @@ void* threadespaxe(void* primeiro){
     pthread_mutex_lock(&inserir_resposta);                  // exclusao mutua na regiao critica
     inserir(&lista_resposta,primeiro);                      // insere na lista de resposta
     pthread_mutex_unlock(&inserir_resposta);
-
+    
+    
+    node->pronto = true;
     pthread_cond_signal(node->cond);    //acorda apenas a thread do usuario que fez esta requisicao
     
     executando--;
-    node->pronto = true;
+    
 
     pthread_cond_signal(&despache_ok);                     // acorda despachante, para executar nova requisicao
     return NULL;
@@ -302,10 +309,14 @@ void* despachar(void*arg){
             pthread_cond_wait(&despache_ok,&mutex_despachante);
         }
         
+        
         //pega da lista
         printf("\ndespachante pega primeiro da lista para executar\n");
         executando++;
-        Node*primeiro = remover(&lista_espera);
+        
+        pthread_mutex_lock(&espera_agendamento);
+        Node*primeiro = remover(&lista_espera);     //lista e regiao critica
+        pthread_mutex_unlock(&espera_agendamento);
 
         pthread_mutex_unlock(&mutex_despachante);
 
