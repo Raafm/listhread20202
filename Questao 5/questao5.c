@@ -50,9 +50,9 @@ pthread_mutex_t mutex_despachante = PTHREAD_MUTEX_INITIALIZER;;      // mutex re
 pthread_t despache;                     //thread de despache
 
 pthread_mutex_t inserir_resposta = PTHREAD_MUTEX_INITIALIZER;;       // mutex para exclusao mutua para produzir na fila de respostas     
-pthread_mutex_t espera_resultado = PTHREAD_MUTEX_INITIALIZER;;       // mutex para exclusao mutua para consumir na fila de resposta
+pthread_mutex_t mutex_fila_resultado = PTHREAD_MUTEX_INITIALIZER;;       // mutex para exclusao mutua para consumir na fila de resposta
 
-pthread_mutex_t espera_agendamento =PTHREAD_MUTEX_INITIALIZER;;     // mutex para exclusao mutua na fila de tarefas agendadas 
+pthread_mutex_t mutex_fila_agendamento =PTHREAD_MUTEX_INITIALIZER;;     // mutex para exclusao mutua na fila de tarefas agendadas 
 
 
 
@@ -87,7 +87,7 @@ typedef struct Node {
     pthread_cond_t* cond;
     
     int resposta;
-    int pronto;
+    int pronto; //indica que a resposta esta pronta e thread usuario pode pega-la
 }Node;
 
 void apaga_node(Node*node){
@@ -140,6 +140,18 @@ Node* remover(linked_list* fila){//remeove de tras
     return retornado; //nao se esquecer de dar free depois de usar
 }
 
+Node* remover_node(linked_list *fila,Node *node){ ///remove node de qualquer posicao, ele pode remover de qualquer lista mas passar como parametro organiza
+    if(node){
+        Node* anterior = node->prev;
+        Node* posterior = node->next;
+
+        if(anterior )anterior->next = posterior;
+        if(posterior)posterior->prev = anterior;
+        node->prev = node->next = NULL;
+    }
+    return node;
+}
+
 Node* id_front(linked_list* fila){  // retorna id do head da list
     return  (*fila).head;
 }
@@ -166,7 +178,7 @@ void apagar_fila(linked_list* fila){
 }
 
 
-linked_list lista_espera;           //duas linked_lists criadas
+linked_list lista_agendamento;           //duas linked_lists criadas
 linked_list lista_resposta;
 
 
@@ -202,9 +214,9 @@ Node* agendarExecucao(void* funexec, void *arg){
     new_node->pronto = false;  // enquanto nao tem resposta 
 
     // lista de espera para agendar: regiao critica. 
-    pthread_mutex_lock(&espera_agendamento);
-    inserir(&lista_espera,new_node);
-    pthread_mutex_unlock(&espera_agendamento);
+    pthread_mutex_lock(&mutex_fila_agendamento);
+    inserir(&lista_agendamento,new_node);
+    pthread_mutex_unlock(&mutex_fila_agendamento);
 
     // acordar thread despachante para colocar a solicitacao em alguma thread para executar
     printf("\nacorda despachante para tratar requisicao\n"); 
@@ -214,7 +226,7 @@ Node* agendarExecucao(void* funexec, void *arg){
     Node*id = new_node; // retorna node para poder pegar a resposta
     
     printf("estado da lista de espera:\n");
-    print_list(&lista_espera);
+    print_list(&lista_agendamento);
     return id;
 }
 
@@ -233,23 +245,21 @@ int pegarResultadoExecucao(Node* id){
     int Resposta;
     while(true){
   
-        pthread_mutex_lock(&espera_resultado); //tenta pegar resultado
-        pthread_mutex_lock(personal_mutex);
+        pthread_mutex_lock(&mutex_fila_resultado); //tenta pegar resultado
+        pthread_mutex_lock(personal_mutex); //auxiliar, serve apenas para wait() quando resultado nao estiver prontos
   
         if (id->pronto){
             Resposta = (id->resposta);
-            pthread_mutex_unlock(&espera_resultado);
 
-            pthread_mutex_lock(&inserir_resposta);
-            remover(&lista_resposta);
-            pthread_mutex_unlock(&inserir_resposta);
+            remover_node(&lista_resposta,id); // remove node de qualquer posicao que ele esteja na linked list
+            pthread_mutex_unlock(&mutex_fila_resultado); //unlock para outros poderem pegar seus resultados
 
             apaga_node(id); //finalmente o Node pode ser apagado
             return Resposta;
         }
         else{
             printf("\nresposta nao esta pronta\n");
-            pthread_mutex_unlock(&espera_resultado);  //unlock para outros poderem pegar 
+            pthread_mutex_unlock(&mutex_fila_resultado);  //unlock para outros poderem pegar 
             printf("dorme enquanto espera\n\n");
             pthread_cond_wait(personal_cond,personal_mutex);//acordo exatamente esta thread quando terminar.
         }
@@ -304,7 +314,7 @@ void* despachar(void*arg){
 
         pthread_mutex_lock(&mutex_despachante);
 
-        while(executando == N || empty(&lista_espera)){
+        while(executando == N || empty(&lista_agendamento)){
             printf("\nlista vazia\n"); 
             pthread_cond_wait(&despache_ok,&mutex_despachante);
         }
@@ -314,9 +324,9 @@ void* despachar(void*arg){
         printf("\ndespachante pega primeiro da lista para executar\n");
         executando++;
         
-        pthread_mutex_lock(&espera_agendamento);
-        Node*primeiro = remover(&lista_espera);     //lista e regiao critica
-        pthread_mutex_unlock(&espera_agendamento);
+        pthread_mutex_lock(&mutex_fila_agendamento);
+        Node*primeiro = remover(&lista_agendamento);     //lista e regiao critica
+        pthread_mutex_unlock(&mutex_fila_agendamento);
 
         pthread_mutex_unlock(&mutex_despachante);
 
@@ -333,16 +343,16 @@ void* despachar(void*arg){
 // fim thread despachante
 
 void inicia_API(){
-    lista_espera.head = lista_espera.tail = lista_resposta.head = lista_resposta.tail = NULL;
+    lista_agendamento.head = lista_agendamento.tail = lista_resposta.head = lista_resposta.tail = NULL;
     pthread_create(&despache,NULL,despachar,NULL);
 
 }
 
 void free_API(){
     apagar_fila(&lista_resposta);
-    apagar_fila(&lista_espera);
+    apagar_fila(&lista_agendamento);
     free(&lista_resposta);
-    free(&lista_espera);
+    free(&lista_agendamento);
     printf("API finalizada\n");
     
 }
@@ -392,6 +402,7 @@ void* importunar(void* arg){
         printf("\nusuario[%d] pegou resultado:\noperacao[%d](%d,%d) = %d\n\n",self_id,N_operacao,x,y,resposta);
 
     }
+    return NULL;
 
 }
 
